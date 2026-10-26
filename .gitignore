@@ -1,0 +1,5 @@
+node_modules/
+slothlog.db
+slothlog.db-shm
+slothlog.db-wal
+.DS_Store

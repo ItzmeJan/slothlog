@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SlothLog — slow attendance</title>
+  <meta name="description" content="One-tap attendance, recapped by a local open-weight model." />
+  <style>
+    :root {
+      --cream: #f7f2e7;
+      --paper: #fffdf8;
+      --ink: #22352a;
+      --muted: #6d7b70;
+      --moss: #2f5d43;
+      --moss-dark: #234734;
+      --lime: #dce8c6;
+      --clay: #c96b4b;
+      --line: #e3ddce;
+      --shadow: 0 18px 50px rgba(44, 65, 48, .09);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 500px at 85% -10%, #e7edda 0%, transparent 60%),
+        radial-gradient(700px 400px at -10% 110%, #f0e3d6 0%, transparent 55%),
+        var(--cream);
+      font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    .wrap { width: min(980px, calc(100% - 32px)); margin: 0 auto; padding: 44px 0 64px; }
+    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .mark {
+      width: 54px; height: 54px; display: grid; place-items: center; font-size: 28px;
+      background: var(--lime); border: 1px solid #cbd9b2; border-radius: 18px 18px 18px 6px;
+      box-shadow: var(--shadow);
+    }
+    h1 { margin: 0; font: 700 34px/1.1 Georgia, "Times New Roman", serif; letter-spacing: -.02em; }
+    .tagline { margin: 5px 0 0; color: var(--muted); max-width: 54ch; }
+    .date {
+      margin-top: 7px; padding: 8px 13px; border: 1px solid var(--line); border-radius: 999px;
+      background: rgba(255, 253, 248, .7); color: var(--muted); font-size: 13px; white-space: nowrap;
+    }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 30px 0 24px; }
+    .stat { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+    .stat b { display: block; font: 700 26px/1 Georgia, serif; }
+    .stat span { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .grid { display: grid; grid-template-columns: 1.35fr .85fr; gap: 20px; align-items: start; }
+    .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); }
+    .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 20px 22px 12px; }
+    h2 { margin: 0; font: 700 20px/1.2 Georgia, serif; }
+    .hint { color: var(--muted); font-size: 12px; }
+    .add { display: flex; gap: 8px; padding: 0 22px 16px; }
+    input[type="text"] {
+      flex: 1; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 11px;
+      background: #fff; color: var(--ink); font: inherit;
+    }
+    input[type="text"]:focus-visible, button:focus-visible { outline: 3px solid #9bb87b; outline-offset: 2px; }
+    button {
+      cursor: pointer; font: 600 14px/1 inherit; border-radius: 11px; border: 1px solid transparent;
+      padding: 12px 15px; transition: transform .12s ease, background .12s ease;
+    }
+    button:active { transform: translateY(1px); }
+    button:disabled { cursor: default; opacity: .55; transform: none; }
+    .primary { background: var(--moss); color: #fff; }
+    .primary:hover:not(:disabled) { background: var(--moss-dark); }
+    .ghost { background: transparent; border-color: var(--line); color: var(--moss); }
+    .people { list-style: none; margin: 0; padding: 0 12px 14px; }
+    .person {
+      display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-top: 1px solid #eee8db;
+    }
+    .person:first-child { border-top: 0; }
+    .avatar {
+      flex: 0 0 42px; height: 42px; display: grid; place-items: center; border-radius: 50%;
+      background: var(--lime); color: var(--moss-dark); font-weight: 700; text-transform: uppercase;
+    }
+    .who { flex: 1; min-width: 0; }
+    .who strong { display: block; font-size: 15px; }
+    .who small { color: var(--muted); font-size: 12.5px; }
+    .person .primary, .person .ghost { min-width: 102px; }
+    .empty { padding: 26px 22px 34px; color: var(--muted); text-align: center; }
+    .recap { padding: 20px 22px 22px; }
+    .recap p { margin: 0 0 16px; min-height: 82px; font: 400 17px/1.55 Georgia, serif; color: #33473a; }
+    .recap p.placeholder { color: var(--muted); font-style: italic; }
+    .recap-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 999px;
+      background: var(--lime); color: var(--moss-dark); font-size: 11px; font-weight: 600; max-width: 100%;
+    }
+    .badge.off { background: #f0e9dc; color: var(--muted); }
+    .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .note { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 20px); opacity: 0;
+      padding: 11px 16px; border-radius: 12px; background: var(--ink); color: #fff; font-size: 14px;
+      pointer-events: none; transition: .2s ease; max-width: calc(100% - 32px);
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    footer { margin-top: 22px; color: var(--muted); font-size: 12px; text-align: center; }
+    @media (max-width: 760px) {
+      .grid { grid-template-columns: 1fr; }
+      .wrap { padding-top: 28px; }
+      h1 { font-size: 29px; }
+      .person .primary, .person .ghost { min-width: 88px; }
+    }
+    @media (max-width: 420px) {
+      .stats { grid-template-columns: 1fr 1fr; }
+      .stat:last-child { grid-column: span 2; }
+      .add { flex-direction: column; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header>
+      <div class="brand">
+        <div class="mark" aria-hidden="true">🦥</div>
+        <div>
+          <h1>SlothLog</h1>
+          <p class="tagline">One-tap attendance. An open-weight model does the remembering, so you can go be slow somewhere else.</p>
+        </div>
+      </div>
+      <div class="date" id="date"></div>
+    </header>
+
+    <section class="stats" aria-label="This week">
+      <div class="stat"><b id="stat-checkins">0</b><span>check-ins this week</span></div>
+      <div class="stat"><b id="stat-hours">0h</b><span>time logged</span></div>
+      <div class="stat"><b id="stat-open">0</b><span>still checked in</span></div>
+    </section>
+
+    <div class="grid">
+      <section class="panel" aria-labelledby="team-title">
+        <div class="panel-head">
+          <h2 id="team-title">Today’s crew</h2>
+          <span class="hint">One tap in, one tap out.</span>
+        </div>
+        <form class="add" id="add-form">
+          <label for="name" class="hint" style="position:absolute;left:-9999px">Name</label>
+          <input id="name" name="name" type="text" maxlength="40" placeholder="Add a name…" autocomplete="off" required />
+          <button class="primary" type="submit">Add</button>
+        </form>
+        <ul class="people" id="people"></ul>
+      </section>
+
+      <aside class="panel recap" aria-labelledby="recap-title">
+        <div class="panel-head" style="padding:0 0 14px">
+          <h2 id="recap-title">The slow recap</h2>
+        </div>
+        <p id="recap" class="placeholder" aria-live="polite">Add a few people, check them in, then let the sloth turn the week into two calm sentences.</p>
+        <div class="recap-foot">
+          <span class="badge off" id="model"><span class="dot"></span> no model yet</span>
+          <button class="ghost" id="recap-btn" type="button">Ask the sloth</button>
+        </div>
+        <p class="note" id="note">Runs through Ollama with an open-weight model. A local model keeps your data on this machine; a cloud model sends it to the host.</p>
+      </aside>
+    </div>
+
+    <footer>SlothLog · open source · built for Hacktoberfest 2026</footer>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let current = null;
+
+    const fmtDay = (iso) => new Date(iso + "T12:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    const fmtTime = (iso) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const hours = (mins) => mins >= 60 ? `${(mins / 60).toFixed(1)}h` : `${mins}m`;
+
+    function toast(message) {
+      const el = $("toast");
+      el.textContent = message;
+      el.classList.add("show");
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => el.classList.remove("show"), 3200);
+    }
+
+    async function call(path, options = {}) {
+      const res = await fetch(path, { headers: { "content-type": "application/json" }, ...options });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Something went wrong.");
+      return data;
+    }
+
+    function render(data) {
+      current = data;
+      $("date").textContent = fmtDay(data.today);
+      $("stat-checkins").textContent = data.week.checkins;
+      $("stat-hours").textContent = hours(data.week.minutes);
+      $("stat-open").textContent = data.people.filter((p) => p.in_at && !p.out_at).length;
+
+      if (!data.people.length) {
+        $("people").innerHTML = '<li class="empty">No one yet. Add the first name above — it takes less effort than a sign-in sheet.</li>';
+        return;
+      }
+
+      $("people").innerHTML = data.people.map((p) => {
+        let status = "Not in today";
+        let action = `<button class="primary" data-act="in" data-id="${p.id}">Check in</button>`;
+        if (p.in_at && !p.out_at) {
+          status = `In since ${fmtTime(p.in_at)}`;
+          action = `<button class="ghost" data-act="out" data-id="${p.id}">Check out</button>`;
+        } else if (p.out_at) {
+          const mins = Math.round((Date.parse(p.out_at) - Date.parse(p.in_at)) / 60000);
+          status = `${fmtTime(p.in_at)} – ${fmtTime(p.out_at)} · ${hours(mins)}`;
+          action = `<button class="ghost" disabled>Done</button>`;
+        }
+        return `<li class="person">
+          <span class="avatar" aria-hidden="true">${esc(p.name.slice(0, 1))}</span>
+          <span class="who"><strong>${esc(p.name)}</strong><small>${status}</small></span>
+          ${action}
+        </li>`;
+      }).join("");
+    }
+
+    async function load() {
+      try { render(await call("/api/state")); }
+      catch (error) { toast(error.message); }
+    }
+
+    $("add-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const input = $("name");
+      try {
+        render(await call("/api/people", { method: "POST", body: JSON.stringify({ name: input.value }) }));
+        input.value = "";
+        input.focus();
+      } catch (error) { toast(error.message); }
+    });
+
+    $("people").addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-act]");
+      if (!button) return;
+      button.disabled = true;
+      try {
+        render(await call(`/api/${button.dataset.act === "in" ? "checkin" : "checkout"}`, {
+          method: "POST",
+          body: JSON.stringify({ personId: Number(button.dataset.id) }),
+        }));
+      } catch (error) {
+        button.disabled = false;
+        toast(error.message);
+      }
+    });
+
+    $("recap-btn").addEventListener("click", async () => {
+      const button = $("recap-btn");
+      button.disabled = true;
+      button.textContent = "Thinking slowly…";
+      $("recap").classList.add("placeholder");
+      $("recap").textContent = "The sloth is looking at the week…";
+      try {
+        const result = await call("/api/recap", { method: "POST" });
+        $("recap").classList.remove("placeholder");
+        $("recap").textContent = result.text;
+        $("note").textContent = result.ai
+          ? result.local
+            ? `Written by ${result.model} through Ollama. Your attendance data stayed on this machine.`
+            : `Written by ${result.model} through Ollama. Attendance data was sent to the model host.`
+          : result.note;
+        $("model").classList.toggle("off", !result.ai);
+        $("model").innerHTML = `<span class="dot"></span>${result.ai ? esc(result.model) : "built-in recap"}`;
+      } catch (error) {
+        $("recap").textContent = error.message;
+        toast(error.message);
+      } finally {
+        button.disabled = false;
+        button.textContent = "Ask the sloth";
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>
